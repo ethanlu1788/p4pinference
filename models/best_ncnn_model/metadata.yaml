@@ -1,0 +1,23 @@
+description: Ultralytics YOLO11n model trained on C:/Users/ethan/Documents/Part-Four-Project--137/yolo_dataset/data.yaml
+author: Ultralytics
+date: '2025-09-19T11:44:05.738068'
+version: 8.3.196
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: Person
+  1: Head
+  2: Glasses
+  3: Hands
+  4: Safety-vest
+  5: Helmet
+args:
+  batch: 1
+  half: false
+channels: 3

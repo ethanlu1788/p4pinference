@@ -133,7 +133,44 @@ def infer_tflite_model(interpreter, input_data):
     interpreter.set_tensor(input_details[0]['index'], input_data)
     interpreter.invoke()
     return [interpreter.get_tensor(out['index']) for out in output_details]
+# # If you have pip install ncnn, use pyncnn; otherwise, use subprocess with ncnn CLI
+try:
+    import ncnn
 
+    def load_ncnn_model(param_path, bin_path):
+        net = ncnn.Net()
+        net.load_param(param_path)
+        net.load_model(bin_path)
+        return net
+
+    def infer_ncnn_model(net, input_data):
+        # input_data should be (1, 3, 640, 640) float32
+        # NCNN needs a ncnn.Mat
+        mat = ncnn.Mat(input_data[0])  # [0]: batch dimension
+        ex = net.create_extractor()
+        ex.input("in0", mat)
+        ret, output = ex.extract("out0")
+        return output
+except ImportError:
+    load_ncnn_model = None
+    infer_ncnn_model = None
+import torch
+
+def load_torchscript_model(path):
+    model = torch.jit.load(path, map_location='cpu')
+    model.eval()
+    return model
+
+def infer_torchscript_model(model, input_data):
+    # input_data should be torch tensor in NCHW, float32
+    input_tensor = torch.from_numpy(input_data)
+    with torch.no_grad():
+        output = model(input_tensor)
+    # convert to numpy for consistency
+    if hasattr(output, 'numpy'):
+        return output.numpy()
+    else:
+        return output
 # --- ONNX ---
 import onnxruntime as ort
 
@@ -160,39 +197,52 @@ def infer_openvino_model(compiled_model, input_data):
     infer_request.infer({input_tensor_name: input_data})
     output = infer_request.get_output_tensor()
     return output.data
-
 if __name__ == "__main__":
-    # --- Configuration ---
     VIDEO_PATH = "safety_glasses_on.mov"
     MODEL_INPUT_SHAPE = (640, 640)
-    OUTPUT_CSV = "full_video_benchmark_pi5.csv"
+    OUTPUT_CSV = "full_video_benchmark_pi5v2.csv"
     ITERATIONS = 1
 
-    # --- ONNX Benchmark (FP32) ---
-    if 'load_onnx_model' in globals() and load_onnx_model:
+    # ONNX
+    if load_onnx_model:
         onnx_session, onnx_input_name = load_onnx_model("models/best_onnx.onnx")
         benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(onnx_session, onnx_input_name, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
-    # --- OpenVINO Benchmark (FP32) ---
-    if 'load_openvino_model' in globals() and load_openvino_model:
+    # OpenVINO FP32
+    if load_openvino_model:
         openvino_fp32_model = load_openvino_model("models/best_openvino_model/best.xml")
         benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(openvino_fp32_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
-    # --- OpenVINO Benchmark (INT8) - NEW ---
-    if 'load_openvino_model' in globals() and load_openvino_model:
-        # Assumes you have an INT8 model exported in this path
+    # OpenVINO INT8
+    if load_openvino_model:
         openvino_int8_model = load_openvino_model("models/best_int8_openvino_model/best.xml")
         benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(openvino_int8_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
-        # --- TFLite Benchmark ---
-    if 'load_tflite_model' in globals() and load_tflite_model:
+    # TFLite
+    if load_tflite_model:
         tflite_interpreter = load_tflite_model("models/best_saved_model_tflite/best_float32.tflite")
-        # TFLite expects NHWC input shape: (1, 640, 640, 3)
-        benchmark_video_with_detailed_logging(
-            "TFLite",
-            lambda x: infer_tflite_model(tflite_interpreter, x),
-            VIDEO_PATH,
-            MODEL_INPUT_SHAPE,
-            OUTPUT_CSV,
-            iterations=ITERATIONS
-        )
+        benchmark_video_with_detailed_logging("TFLite", lambda x: infer_tflite_model(tflite_interpreter, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+
+    # TorchScript
+    if load_torchscript_model:
+        torchscript_model = load_torchscript_model("models/best.torchscript")
+        def ts_infer(x):
+            # TorchScript expects input shape: (1, 3, 640, 640)
+            if x.shape[-1] == 3:  # NHWC
+                x_nchw = x.transpose(0,3,1,2)  # convert to NCHW
+            else:
+                x_nchw = x
+            return infer_torchscript_model(torchscript_model, x_nchw)
+        benchmark_video_with_detailed_logging("TorchScript", ts_infer, VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+
+    # NCNN
+    if load_ncnn_model and infer_ncnn_model:
+        ncnn_net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
+        def ncnn_infer(x):
+            # NCNN expects (1, 3, 640, 640)
+            if x.shape[-1] == 3:  # NHWC
+                x_nchw = x.transpose(0,3,1,2)
+            else:
+                x_nchw = x
+            return infer_ncnn_model(ncnn_net, x_nchw)
+        benchmark_video_with_detailed_logging("NCNN", ncnn_infer, VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
