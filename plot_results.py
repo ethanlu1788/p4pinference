@@ -75,5 +75,5 @@ def plot_full_performance(csv_filename, window_size=50):
     print(df[summary_cols].to_string(index=False))
 
 if __name__ == "__main__":
-    CSV_FILE = "full_video_benchmark_newtest.csv"
+    CSV_FILE = "full_video_benchmark_pi5v2.csv"
     plot_full_performance(CSV_FILE, window_size=50)

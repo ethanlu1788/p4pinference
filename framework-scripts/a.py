@@ -6,6 +6,6 @@ model = YOLO('../models/best.pt')
 
 # Export the model directly to TFLite format
 # This will create 'yolov11n_float32.tflite'
-model.export(format='torchscript')
+model.export(format='tflite')
 
 print("Successfully exported to yolov11n_float32.tflite")
