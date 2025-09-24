@@ -200,12 +200,12 @@ def infer_openvino_model(compiled_model, input_data):
 if __name__ == "__main__":
     VIDEO_PATH = "safety_glasses_on.mov"
     MODEL_INPUT_SHAPE = (640, 640)
-    OUTPUT_CSV = "full_video_benchmark_pi5v2.csv"
+    OUTPUT_CSV = "full_video_benchmark_pi5v4.csv"
     ITERATIONS = 1
 
     # ONNX
     if load_onnx_model:
-        onnx_session, onnx_input_name = load_onnx_model("models/best_onnx.onnx")
+        onnx_session, onnx_input_name = load_onnx_model("models/best.onnx")
         benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(onnx_session, onnx_input_name, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # OpenVINO FP32
