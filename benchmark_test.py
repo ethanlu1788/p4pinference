@@ -201,7 +201,7 @@ if __name__ == "__main__":
     VIDEO_PATH = "safety_glasses_on.mov"
     MODEL_INPUT_SHAPE = (640, 640)
     OUTPUT_CSV = "full_video_benchmark_pi5v4.csv"
-    ITERATIONS = 1
+    ITERATIONS = 5
 
     # ONNX
     if load_onnx_model:

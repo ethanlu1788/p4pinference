@@ -6,6 +6,7 @@ def plot_full_performance(csv_filename, window_size=50):
     """
     Plots smoothed CPU (%), FPS, and RAM (MB) usage over time for each model.
     RAM plots actual process memory usage in MB.
+    Skips TFLite models in the plot.
     """
     try:
         df = pd.read_csv(csv_filename)
@@ -19,6 +20,9 @@ def plot_full_performance(csv_filename, window_size=50):
 
     for index, row in df.iterrows():
         model_name = row['model_name']
+        # Skip TFLite models
+        if 'tflite' in model_name.lower():
+            continue
 
         # --- CPU ---
         try:
@@ -56,7 +60,7 @@ def plot_full_performance(csv_filename, window_size=50):
     ax1.set_title('Smoothed CPU Usage (%)')
     ax1.set_ylabel('CPU (%)')
     ax1.grid(True, linestyle='--'); ax1.legend()
-    ax1.set_ylim(0, 100)
+    ax1.set_ylim(40, 100)
 
     ax2.set_title('Smoothed FPS')
     ax2.set_ylabel('Frames Per Second')
