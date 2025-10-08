@@ -149,11 +149,23 @@ def infer_tflite_model(it, x):
 
 try:
     import ncnn
-    def load_ncnn_model(p,b):
-        net=ncnn.Net(); net.load_param(p); net.load_model(b); return net
-    def infer_ncnn_model(net,x):
-        m=ncnn.Mat(x[0]); ex=net.create_extractor(); ex.input("in0",m)
-        _,out=ex.extract("out0"); return out
+    def load_ncnn_model(param_path, bin_path):
+        net = ncnn.Net()
+        net.load_param(param_path)
+        net.load_model(bin_path)
+        return net
+
+    def infer_ncnn_model(net, input_data):
+        # input_data should be (1, 3, 640, 640) float32
+        # NCNN needs a ncnn.Mat
+        mat = ncnn.Mat(input_data[0])  # [0]: batch dimension
+        ex = net.create_extractor()
+        ex.input("in0", mat)
+        ret, output = ex.extract("out0")
+        return output
+except ImportError:
+    load_ncnn_model = None
+    infer_ncnn_model = None
 except ImportError:
     load_ncnn_model=infer_ncnn_model=None
 
@@ -176,33 +188,29 @@ def infer_openvino_model(cm,x):
     r=cm.create_infer_request(); r.infer({cm.input(0).any_name:x}); return r.get_output_tensor().data
 
 if __name__=="__main__":
-    VIDEO,SHAPE,CSV="safety_glasses_on.mov",(640,640),"full_video_benchmark.csv"
+    VIDEO,SHAPE,CSV="safety_glasses_on.mov",(640,640),"new_video_benchmark.csv"
     ITERS=5
-
-    # ONNX
-    s,n=load_onnx_model("models/best.onnx")
-    benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(s,n,x), VIDEO, SHAPE, CSV, ITERS)
+        # ONNX
+  #  s,n=load_onnx_model("models/best.onnx")
+  #  benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(s,n,x), VIDEO, SHAPE, CSV, ITERS)
 
     # OpenVINO FP32
-    ov=load_openvino_model("models/best_openvino_model/best.xml")
-    benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(ov,x), VIDEO, SHAPE, CSV, ITERS)
+  #  ov=load_openvino_model("models/best_openvino_model/best.xml")
+  #  benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(ov,x), VIDEO, SHAPE, CSV, ITERS)
 
     # OpenVINO INT8
     ov8=load_openvino_model("models/best_int8_openvino_model/best.xml")
     benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(ov8,x), VIDEO, SHAPE, CSV, ITERS)
 
-    # TFLite
-    tl=load_tflite_model("models/best.tflite")
-    benchmark_video_with_detailed_logging("TFLite", lambda x: infer_tflite_model(tl,x), VIDEO, SHAPE, CSV, ITERS)
+
 
     # TorchScript
-    ts=load_torchscript_model("models/best.torchscript")
-    benchmark_video_with_detailed_logging("TorchScript",
-        lambda x: infer_torchscript_model(ts, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
-        VIDEO, SHAPE, CSV, ITERS)
-
+  #  ts=load_torchscript_model("models/best.torchscript")
+  #  benchmark_video_with_detailed_logging("TorchScript",
+   #     lambda x: infer_torchscript_model(ts, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
+  #      VIDEO, SHAPE, CSV, ITERS)
     # NCNN
-    if load_ncnn_model:
-        net=load_ncnn_model("models/best.param","models/best.bin")
-        benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
-                                             VIDEO, SHAPE, CSV, ITERS)
+  #  if load_ncnn_model:
+  #      net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
+   #     benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
+    #                                         VIDEO, SHAPE, CSV, ITERS)

@@ -200,40 +200,40 @@ def infer_openvino_model(compiled_model, input_data):
 if __name__ == "__main__":
     VIDEO_PATH = "safety_glasses_on.mov"
     MODEL_INPUT_SHAPE = (640, 640)
-    OUTPUT_CSV = "full_video_benchmark_pi5v4.csv"
-    ITERATIONS = 5
+    OUTPUT_CSV = "full_video_benchmark_pi5_ncnn.csv"
+    ITERATIONS = 4
 
     # ONNX
-    if load_onnx_model:
-        onnx_session, onnx_input_name = load_onnx_model("models/best.onnx")
-        benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(onnx_session, onnx_input_name, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+   # if load_onnx_model:
+  #      onnx_session, onnx_input_name = load_onnx_model("models/best.onnx")
+   #     benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(onnx_session, onnx_input_name, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # OpenVINO FP32
-    if load_openvino_model:
-        openvino_fp32_model = load_openvino_model("models/best_openvino_model/best.xml")
-        benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(openvino_fp32_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+  #  if load_openvino_model:
+   #     openvino_fp32_model = load_openvino_model("models/best_openvino_model/best.xml")
+     #   benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(openvino_fp32_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # OpenVINO INT8
-    if load_openvino_model:
-        openvino_int8_model = load_openvino_model("models/best_int8_openvino_model/best.xml")
-        benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(openvino_int8_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+  #  if load_openvino_model:
+   #     openvino_int8_model = load_openvino_model("models/best_int8_openvino_model/best.xml")
+    #    benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(openvino_int8_model, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # TFLite
-    if load_tflite_model:
-        tflite_interpreter = load_tflite_model("models/best_saved_model_tflite/best_float32.tflite")
-        benchmark_video_with_detailed_logging("TFLite", lambda x: infer_tflite_model(tflite_interpreter, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+  #  if load_tflite_model:
+ #       tflite_interpreter = load_tflite_model("models/best_saved_model_tflite/best_float32.tflite")
+ #       benchmark_video_with_detailed_logging("TFLite", lambda x: infer_tflite_model(tflite_interpreter, x), VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # TorchScript
-    if load_torchscript_model:
-        torchscript_model = load_torchscript_model("models/best.torchscript")
-        def ts_infer(x):
+ #   if load_torchscript_model:
+ #       torchscript_model = load_torchscript_model("models/best.torchscript")
+ #       def ts_infer(x):
             # TorchScript expects input shape: (1, 3, 640, 640)
-            if x.shape[-1] == 3:  # NHWC
-                x_nchw = x.transpose(0,3,1,2)  # convert to NCHW
-            else:
-                x_nchw = x
-            return infer_torchscript_model(torchscript_model, x_nchw)
-        benchmark_video_with_detailed_logging("TorchScript", ts_infer, VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
+ #           if x.shape[-1] == 3:  # NHWC
+ #               x_nchw = x.transpose(0,3,1,2)  # convert to NCHW
+ #           else:
+#                x_nchw = x
+ #           return infer_torchscript_model(torchscript_model, x_nchw)
+  #      benchmark_video_with_detailed_logging("TorchScript", ts_infer, VIDEO_PATH, MODEL_INPUT_SHAPE, OUTPUT_CSV, iterations=ITERATIONS)
 
     # NCNN
     if load_ncnn_model and infer_ncnn_model:
