@@ -188,7 +188,7 @@ def infer_openvino_model(cm,x):
     r=cm.create_infer_request(); r.infer({cm.input(0).any_name:x}); return r.get_output_tensor().data
 
 if __name__=="__main__":
-    VIDEO,SHAPE,CSV="safety_glasses_on.mov",(640,640),"new_video_benchmark.csv"
+    VIDEO,SHAPE,CSV="safety_glasses_on.mov",(640,640),"new_video_benchmark_v2.csv"
     ITERS=5
         # ONNX
   #  s,n=load_onnx_model("models/best.onnx")
@@ -196,21 +196,21 @@ if __name__=="__main__":
 
     # OpenVINO FP32
   #  ov=load_openvino_model("models/best_openvino_model/best.xml")
-  #  benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(ov,x), VIDEO, SHAPE, CSV, ITERS)
+ #   benchmark_video_with_detailed_logging("OpenVINO", lambda x: infer_openvino_model(ov,x), VIDEO, SHAPE, CSV, ITERS)
 
     # OpenVINO INT8
-    ov8=load_openvino_model("models/best_int8_openvino_model/best.xml")
-    benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(ov8,x), VIDEO, SHAPE, CSV, ITERS)
+ #   ov8=load_openvino_model("models/best_int8_openvino_model/best.xml")
+  #  benchmark_video_with_detailed_logging("OpenVINO_INT8", lambda x: infer_openvino_model(ov8,x), VIDEO, SHAPE, CSV, ITERS)
 
 
 
     # TorchScript
   #  ts=load_torchscript_model("models/best.torchscript")
-  #  benchmark_video_with_detailed_logging("TorchScript",
-   #     lambda x: infer_torchscript_model(ts, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
-  #      VIDEO, SHAPE, CSV, ITERS)
+#    benchmark_video_with_detailed_logging("TorchScript",
+  #      lambda x: infer_torchscript_model(ts, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
+   #     VIDEO, SHAPE, CSV, ITERS)
     # NCNN
-  #  if load_ncnn_model:
-  #      net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
-   #     benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
-    #                                         VIDEO, SHAPE, CSV, ITERS)
+    if load_ncnn_model:
+        net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
+        benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net, x.transpose(0,3,1,2) if x.shape[-1]==3 else x),
+                                             VIDEO, SHAPE, CSV, ITERS)
