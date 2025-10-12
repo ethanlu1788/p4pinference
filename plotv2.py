@@ -2,10 +2,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import ast
 
+
 def plot_full_performance(csv_filename, window_size=50):
     """
-    Plots smoothed CPU (%), FPS, and RAM (%) usage over time for each model.
-    Creates three separate plots.
+    Plots smoothed CPU (%), FPS, RAM (%), Temperature (°C), and Power (W) usage over time for each model.
+    Creates five separate plots.
     Skips TFLite models in the plots.
     """
     try:
@@ -93,11 +94,77 @@ def plot_full_performance(csv_filename, window_size=50):
     plt.tight_layout()
     plt.show()
 
+    # --- Plot 4: Temperature ---
+    fig4, ax4 = plt.subplots(figsize=(12, 6))
+    fig4.suptitle('CPU Temperature Over Time', fontsize=16)
+
+    for index, row in df.iterrows():
+        model_name = row['model_name']
+        if 'tflite' in model_name.lower():
+            continue
+
+        try:
+            temp_log = ast.literal_eval(row['temp_log'])
+            if temp_log:
+                # Filter out None values
+                valid_temps = [(t, temp) for t, temp in temp_log if temp is not None]
+                if valid_temps:
+                    timestamps, values = zip(*valid_temps)
+                    relative_times = [t - timestamps[0] for t in timestamps]
+                    smoothed_temp = pd.Series(values).rolling(window=window_size, min_periods=1).mean()
+                    ax4.plot(relative_times, smoothed_temp, label=f'{model_name}')
+        except Exception:
+            pass
+
+    ax4.set_xlabel('Time (seconds)')
+    ax4.set_ylabel('Temperature (°C)')
+    ax4.grid(True, linestyle='--')
+    ax4.legend()
+    plt.tight_layout()
+    plt.show()
+
+    # --- Plot 5: Power Usage ---
+    fig5, ax5 = plt.subplots(figsize=(12, 6))
+    fig5.suptitle('Power Consumption Over Time', fontsize=16)
+
+    for index, row in df.iterrows():
+        model_name = row['model_name']
+        if 'tflite' in model_name.lower():
+            continue
+
+        try:
+            power_log = ast.literal_eval(row['power_log'])
+            if power_log:
+                # Filter out None values
+                valid_power = [(t, power) for t, power in power_log if power is not None]
+                if valid_power:
+                    timestamps, values = zip(*valid_power)
+                    relative_times = [t - timestamps[0] for t in timestamps]
+                    smoothed_power = pd.Series(values).rolling(window=window_size, min_periods=1).mean()
+                    ax5.plot(relative_times, smoothed_power, label=f'{model_name}')
+        except Exception:
+            pass
+
+    ax5.set_xlabel('Time (seconds)')
+    ax5.set_ylabel('Power Consumption (W)')
+    ax5.grid(True, linestyle='--')
+    ax5.legend()
+    plt.tight_layout()
+    plt.show()
+
     # Print summary
     print("\n--- Benchmark Summary ---")
     summary_cols = ['model_name', 'iterations', 'overall_fps', 'avg_inference_fps', 'peak_ram_mb']
+
+    # Add temperature and power columns if they exist
+    if 'peak_temp_c' in df.columns:
+        summary_cols.append('peak_temp_c')
+    if 'avg_power_w' in df.columns:
+        summary_cols.append('avg_power_w')
+
     print(df[summary_cols].to_string(index=False))
 
+
 if __name__ == "__main__":
-    CSV_FILE = "full_video_benchmark_pi5v4.csv"
+    CSV_FILE = "new_video_benchmark_v2.csv"
     plot_full_performance(CSV_FILE, window_size=50)
