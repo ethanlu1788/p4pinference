@@ -255,7 +255,4 @@ if __name__ == "__main__":
     # NCNN
     if load_ncnn_model:
         net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
-        benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net,
-                                                                                 x.transpose(0, 3, 1, 2) if x.shape[
-                                                                                                                -1] == 3 else x),
-                                              VIDEO, SHAPE, CSV, ITERS)
+        benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net,x.transpose(0, 3, 1, 2) if x.shape[-1] == 3 else x),VIDEO, SHAPE, CSV, ITERS)
