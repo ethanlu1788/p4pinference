@@ -231,12 +231,12 @@ def infer_openvino_model(cm, x):
 
 
 if __name__ == "__main__":
-    VIDEO, SHAPE, CSV = "safety_glasses_on.mov", (640, 640), "pi5_benchmark.csv"
+    VIDEO, SHAPE, CSV = "safety_glasses_on.mov", (640, 640), "pi5_accelerator_benchmark.csv"
     ITERS = 5
 
     # ONNX
-    #s,n=load_onnx_model("models/best.onnx")
-   # benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(s,n,x), VIDEO, SHAPE, CSV, ITERS)
+    s,n=load_onnx_model("models/best.onnx")
+    benchmark_video_with_detailed_logging("ONNX", lambda x: infer_onnx_model(s,n,x), VIDEO, SHAPE, CSV, ITERS)
 
     # OpenVINO FP32
    # ov=load_openvino_model("models/best_openvino_model/best.xml")
@@ -253,8 +253,8 @@ if __name__ == "__main__":
        #  VIDEO, SHAPE, CSV, ITERS)
 
     # NCNN
-    if load_ncnn_model:
-        net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
-        benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net,x.transpose(0, 3, 1, 2) if x.shape[-1] == 3 else x),VIDEO, SHAPE, CSV, ITERS)
+    #if load_ncnn_model:
+     #   net = load_ncnn_model("models/best_ncnn_model/model.ncnn.param", "models/best_ncnn_model/model.ncnn.bin")
+     #   benchmark_video_with_detailed_logging("NCNN", lambda x: infer_ncnn_model(net,x.transpose(0, 3, 1, 2) if x.shape[-1] == 3 else x),VIDEO, SHAPE, CSV, ITERS)
 
 

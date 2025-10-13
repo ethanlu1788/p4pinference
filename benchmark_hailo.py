@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Hailo NPU Benchmarking Script
-Measures FPS, latency, CPU, RAM, temperature, and power during video inference
+Hailo NPU Benchmarking Script (Modern API - HailoRT 4.20+)
 """
 
 import time
@@ -12,7 +11,8 @@ import numpy as np
 import cv2
 import subprocess
 import glob
-
+from functools import partial
+from concurrent.futures import Future
 
 # --- Performance Monitor ---
 class PerformanceMonitor:
@@ -73,57 +73,101 @@ class PerformanceMonitor:
         self.power_log.append((t, self.get_power_consumption()))
         self.latency_log.append((t, inference_time * 1000))
 
-
-# --- Hailo Inference ---
+# --- Hailo Inference (Modern API) ---
 try:
-    from hailo_platform import (HEF, VDevice, ConfigureParams, InputVStreamParams,
-                                OutputVStreamParams, InferVStreams, FormatType)
+    from hailo_platform import (
+        HEF, VDevice, FormatType, HailoSchedulingAlgorithm
+    )
+
+    class HailoInference:
+        TARGET = None
+        TARGET_REF_COUNT = 0
+
+        def __init__(self, hef_path, output_type='FLOAT32'):
+            params = VDevice.create_params()
+            params.scheduling_algorithm = HailoSchedulingAlgorithm.ROUND_ROBIN
+
+            self.hef = HEF(hef_path)
+            if HailoInference.TARGET is None:
+                HailoInference.TARGET = VDevice(params)
+            HailoInference.TARGET_REF_COUNT += 1
+
+            self.target = HailoInference.TARGET
+            self.infer_model = self.target.create_infer_model(hef_path)
+            self.infer_model.set_batch_size(1)
+            self._set_input_output(output_type)
+            self.configured_infer_model = self.infer_model.configure()
+
+        def _set_input_output(self, output_type):
+            input_format_type = self.hef.get_input_vstream_infos()[0].format.type
+            self.infer_model.input().set_format_type(input_format_type)
+            output_format_type = getattr(FormatType, output_type)
+            for output in self.infer_model.outputs:
+                output.set_format_type(output_format_type)
+
+        def callback(self, completion_info, bindings, future, last):
+            if future._has_had_error:
+                return
+            elif completion_info.exception:
+                future._has_had_error = True
+                future.set_exception(completion_info.exception)
+            else:
+                future._intermediate_result = bindings.output().get_buffer()
+                if last:
+                    future.set_result(future._intermediate_result)
+
+        def _create_bindings(self):
+             # Ensure output buffers match your model's expected output format
+            output_buffers = {
+                name: np.empty(self.infer_model.output(name).shape, dtype=np.float32)
+                for name in self.infer_model.output_names
+    }
+            return self.configured_infer_model.create_bindings(output_buffers=output_buffers)
 
 
-    def load_hailo_model(hef_path):
-        device = VDevice()
-        hef = HEF(hef_path)
-        configure_params = ConfigureParams.create_from_hef(hef, interface=hef.get_default_interface())
-        network_groups = device.configure(hef, configure_params)
-        network_group = network_groups[0]
-        input_vstreams_params = InputVStreamParams.make_from_network_group(network_group,
-                                                                           format_type=FormatType.FLOAT32)
-        output_vstreams_params = OutputVStreamParams.make_from_network_group(network_group,
-                                                                             format_type=FormatType.FLOAT32)
-        return (device, network_group, input_vstreams_params, output_vstreams_params)
+        def run(self, input_data):
+            future = Future()
+            future._has_had_error = False
+            future._intermediate_result = None
 
+            bindings = self._create_bindings()
+            bindings.input().set_buffer(input_data)
+            self.configured_infer_model.wait_for_async_ready(timeout_ms=10000)
+            self.configured_infer_model.run_async([bindings], 
+                partial(self.callback, bindings=bindings, future=future, last=True))
+            
+            return future.result()
 
-    def infer_hailo_model(hailo_objects, input_data):
-        if hailo_objects is None:
-            return None
-        device, network_group, input_vstreams_params, output_vstreams_params = hailo_objects
-        try:
-            with InferVStreams(network_group, input_vstreams_params, output_vstreams_params) as infer_pipeline:
-                if input_data.shape[1] == 3:
-                    input_data = input_data.transpose(0, 2, 3, 1)
-                input_dict = {}
-                for input_info in infer_pipeline.input_vstream_infos:
-                    input_dict[input_info.name] = input_data
-                with network_group.activate():
-                    results = infer_pipeline.infer(input_dict)
-                return list(results.values())
-        except Exception as e:
-            print(f"Inference error: {e}")
-            return None
+        def close(self):
+            del self.configured_infer_model
+            HailoInference.TARGET_REF_COUNT -= 1
+            if HailoInference.TARGET_REF_COUNT == 0:
+                self.target.release()
+                HailoInference.TARGET = None
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            self.close()
 
 except ImportError as e:
     print(f"HailoRT not available: {e}")
-    load_hailo_model = infer_hailo_model = lambda *args: None
-
+    HailoInference = None
 
 # --- Benchmarking Function ---
 def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_csv="hailo_benchmark.csv", iterations=5):
     print(f"\n--- Benchmarking Hailo NPU | Model: {hef_path} | Video: {video_path} ---")
+    
+    if HailoInference is None:
+        print("HailoInference not available.")
+        return
 
     # Load model
-    hailo_model = load_hailo_model(hef_path)
-    if not hailo_model:
-        print("Failed to load Hailo model.")
+    try:
+        hailo_model = HailoInference(hef_path)
+    except Exception as e:
+        print(f"Failed to load Hailo model: {e}")
         return
 
     # Open video
@@ -141,18 +185,23 @@ def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_c
     # Benchmark loop
     total_start = time.perf_counter()
     for i in range(iterations):
-        print(f"  Iteration {i + 1}/{iterations}")
+        print(f"  Iteration {i+1}/{iterations}")
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             # Preprocess
-            img = cv2.cvtColor(cv2.resize(frame, input_shape), cv2.COLOR_BGR2RGB)
-            inp = np.expand_dims(img, 0).astype(np.float32)
+            # Preprocess: resize to 640x640 and convert to uint8 NCHW
+            resized = cv2.resize(frame, (640, 640))  # Resize to 640x640
+            # Convert to RGB and keep as uint8 [0-255]
+            img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)  # (640, 640, 3) uint8
+            inp = np.expand_dims(img, 0).astype(np.uint8)  # (1, 640, 640, 3)
+            inp = np.ascontiguousarray(inp.transpose(0, 3, 1, 2)[0])  # (3, 640, 640) C-contiguous
+
             # Inference
             start = time.perf_counter()
-            infer_hailo_model(hailo_model, inp)
+            hailo_model.run(inp)
             inf_time = time.perf_counter() - start
             # Log
             inference_times.append(inf_time)
@@ -171,7 +220,7 @@ def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_c
     avg_latency_ms = np.mean(inference_times) * 1000
     p95_latency_ms = np.percentile(inference_times, 95) * 1000
     overall_fps = total_frames / total_time
-    avg_power = np.mean([p for _, p in monitor.power_log if p is not None]) if any(monitor.power_log) else None
+    avg_power = np.mean([p for _,p in monitor.power_log if p is not None]) if any(monitor.power_log) else None
 
     results = {
         'model_name': 'Hailo_NPU',
@@ -203,14 +252,14 @@ def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_c
     print(f"Avg Power: {avg_power:.2f} W")
     print(f"Results saved to {output_csv}")
 
-
 # --- Main ---
 if __name__ == "__main__":
     BENCHMARK_CONFIG = {
-        "hef_path": "models/best.hef",  # Update path
-        "video_path": "safety_glasses_on.mov",  # Update path
+        "hef_path": "models/yolov11n.hef",
+        "video_path": "safety_glasses_on.mov",
         "input_shape": (640, 640),
         "output_csv": "hailo_benchmark_results.csv",
         "iterations": 5
     }
     benchmark_hailo_model(**BENCHMARK_CONFIG)
+

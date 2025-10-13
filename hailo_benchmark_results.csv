@@ -1,0 +1,2 @@
+model_name,hef_file,iterations,overall_fps,avg_latency_ms,p95_latency_ms,peak_ram_mb,peak_temp_c,avg_power_w,total_frames,total_time_s
+Hailo_NPU,yolov11n.hef,5,68.59303563664501,9.962723998246418,10.210451600141823,199.21875,52.35,3.568506962025316,1185,17.275806341000134
