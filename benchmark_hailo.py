@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Hailo NPU Benchmarking Script (Modern API - HailoRT 4.20+)
+Logs performance per frame for detailed time-series analysis
 """
 
 import time
@@ -71,7 +72,7 @@ class PerformanceMonitor:
         self.fps_log.append((t, 1.0 / inference_time if inference_time > 0 else 0))
         self.temp_log.append((t, self.get_cpu_temperature()))
         self.power_log.append((t, self.get_power_consumption()))
-        self.latency_log.append((t, inference_time * 1000))
+        self.latency_log.append((t, inference_time * 1000))  # ms
 
 # --- Hailo Inference (Modern API) ---
 try:
@@ -117,13 +118,11 @@ try:
                     future.set_result(future._intermediate_result)
 
         def _create_bindings(self):
-             # Ensure output buffers match your model's expected output format
             output_buffers = {
                 name: np.empty(self.infer_model.output(name).shape, dtype=np.float32)
                 for name in self.infer_model.output_names
-    }
+            }
             return self.configured_infer_model.create_bindings(output_buffers=output_buffers)
-
 
         def run(self, input_data):
             future = Future()
@@ -192,18 +191,16 @@ def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_c
             if not ret:
                 break
             # Preprocess
-            # Preprocess: resize to 640x640 and convert to uint8 NCHW
-            resized = cv2.resize(frame, (640, 640))  # Resize to 640x640
-            # Convert to RGB and keep as uint8 [0-255]
-            img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)  # (640, 640, 3) uint8
-            inp = np.expand_dims(img, 0).astype(np.uint8)  # (1, 640, 640, 3)
-            inp = np.ascontiguousarray(inp.transpose(0, 3, 1, 2)[0])  # (3, 640, 640) C-contiguous
+            resized = cv2.resize(frame, (640, 640))
+            img = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            inp = np.expand_dims(img, 0).astype(np.uint8)
+            inp = np.ascontiguousarray(inp.transpose(0, 3, 1, 2)[0])
 
             # Inference
             start = time.perf_counter()
             hailo_model.run(inp)
             inf_time = time.perf_counter() - start
-            # Log
+            # Log per-frame performance
             inference_times.append(inf_time)
             monitor.log_performance(inf_time)
             # Stats
@@ -216,24 +213,31 @@ def benchmark_hailo_model(hef_path, video_path, input_shape=(640, 640), output_c
     cap.release()
     total_time = time.perf_counter() - total_start
 
-    # Results
+    # Calculate metrics
     avg_latency_ms = np.mean(inference_times) * 1000
+    p50_latency_ms = np.percentile(inference_times, 50) * 1000
     p95_latency_ms = np.percentile(inference_times, 95) * 1000
     overall_fps = total_frames / total_time
     avg_power = np.mean([p for _,p in monitor.power_log if p is not None]) if any(monitor.power_log) else None
 
+    # Full results with time-series data
     results = {
         'model_name': 'Hailo_NPU',
         'hef_file': os.path.basename(hef_path),
         'iterations': iterations,
         'overall_fps': overall_fps,
         'avg_latency_ms': avg_latency_ms,
+        'p50_latency_ms': p50_latency_ms,
         'p95_latency_ms': p95_latency_ms,
         'peak_ram_mb': peak_ram,
         'peak_temp_c': peak_temp,
         'avg_power_w': avg_power,
-        'total_frames': total_frames,
-        'total_time_s': total_time
+        'cpu_log': str(monitor.cpu_log),
+        'fps_log': str(monitor.fps_log),
+        'ram_log': str(monitor.ram_log),
+        'temp_log': str(monitor.temp_log),
+        'power_log': str(monitor.power_log),
+        'latency_log': str(monitor.latency_log),
     }
 
     # Save to CSV
