@@ -6,6 +6,7 @@ model = YOLO('../models/best.pt')
 
 # Export the model directly to TFLite format
 # This will create 'yolov11n_float32.tflite'
-model.export(format='tflite')
+model.export(format='ncnn', data="../val/val.yaml")
+
 
 print("Successfully exported to yolov11n_float32.tflite")

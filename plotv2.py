@@ -5,8 +5,8 @@ import ast
 
 def plot_full_performance(csv_filename, window_size=50):
     """
-    Plots smoothed CPU (%), FPS, RAM (%), Temperature (°C), and Power (W) usage over time for each model.
-    Creates five separate plots.
+    Plots smoothed CPU (%), FPS, RAM (%), Temperature (°C), Power (W), and Latency (ms) over time.
+    Creates six separate plots.
     Skips TFLite models in the plots.
     """
     try:
@@ -36,7 +36,7 @@ def plot_full_performance(csv_filename, window_size=50):
 
     ax1.set_xlabel('Time (seconds)')
     ax1.set_ylabel('CPU Usage (%)')
-    ax1.set_ylim(40, 100)
+    ax1.set_ylim(0, 100)
     ax1.grid(True, linestyle='--')
     ax1.legend()
     plt.tight_layout()
@@ -106,7 +106,6 @@ def plot_full_performance(csv_filename, window_size=50):
         try:
             temp_log = ast.literal_eval(row['temp_log'])
             if temp_log:
-                # Filter out None values
                 valid_temps = [(t, temp) for t, temp in temp_log if temp is not None]
                 if valid_temps:
                     timestamps, values = zip(*valid_temps)
@@ -135,7 +134,6 @@ def plot_full_performance(csv_filename, window_size=50):
         try:
             power_log = ast.literal_eval(row['power_log'])
             if power_log:
-                # Filter out None values
                 valid_power = [(t, power) for t, power in power_log if power is not None]
                 if valid_power:
                     timestamps, values = zip(*valid_power)
@@ -152,11 +150,39 @@ def plot_full_performance(csv_filename, window_size=50):
     plt.tight_layout()
     plt.show()
 
+    # --- Plot 6: Latency ---
+    fig6, ax6 = plt.subplots(figsize=(12, 6))
+    fig6.suptitle('Inference Latency Over Time', fontsize=16)
+
+    for index, row in df.iterrows():
+        model_name = row['model_name']
+        if 'tflite' in model_name.lower():
+            continue
+
+        try:
+            latency_log = ast.literal_eval(row['latency_log'])
+            if latency_log:
+                timestamps, values = zip(*latency_log)  # values in ms
+                relative_times = [t - timestamps[0] for t in timestamps]
+                smoothed_latency = pd.Series(values).rolling(window=window_size, min_periods=1).mean()
+                ax6.plot(relative_times, smoothed_latency, label=f'{model_name}')
+        except Exception:
+            pass
+
+    ax6.set_xlabel('Time (seconds)')
+    ax6.set_ylabel('Latency (ms)')
+    ax6.grid(True, linestyle='--')
+    ax6.legend()
+    plt.tight_layout()
+    plt.show()
+
     # Print summary
     print("\n--- Benchmark Summary ---")
-    summary_cols = ['model_name', 'iterations', 'overall_fps', 'avg_inference_fps', 'peak_ram_mb']
+    summary_cols = [
+        'model_name', 'iterations', 'overall_fps', 'avg_latency_ms',
+        'p95_latency_ms', 'peak_ram_mb'
+    ]
 
-    # Add temperature and power columns if they exist
     if 'peak_temp_c' in df.columns:
         summary_cols.append('peak_temp_c')
     if 'avg_power_w' in df.columns:
@@ -166,5 +192,5 @@ def plot_full_performance(csv_filename, window_size=50):
 
 
 if __name__ == "__main__":
-    CSV_FILE = "new_video_benchmark_v2.csv"
+    CSV_FILE = "pi4_benchmark.csv"
     plot_full_performance(CSV_FILE, window_size=50)
